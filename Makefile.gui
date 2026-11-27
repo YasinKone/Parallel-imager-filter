@@ -1,0 +1,46 @@
+
+CXX = clang++
+
+IMGUI_DIR = external/imgui
+GLFW_DIR = /opt/homebrew/opt/glfw
+
+CXXFLAGS = -std=c++17 -O3 -Wall -Wextra \
+    -Xpreprocessor -fopenmp \
+    -I/opt/homebrew/opt/libomp/include \
+    -I$(IMGUI_DIR) \
+    -I$(IMGUI_DIR)/backends \
+    -I$(GLFW_DIR)/include \
+    -Iexternal/implot
+
+LDFLAGS = -L$(GLFW_DIR)/lib -lglfw \
+    -L/opt/homebrew/opt/libomp/lib -lomp \
+    -framework OpenGL \
+    -framework Cocoa \
+    -framework IOKit \
+    -framework CoreVideo
+
+
+IMPLOT_DIR = external/implot
+
+
+IMGUI_SRC = \
+    $(IMGUI_DIR)/imgui.cpp \
+    $(IMGUI_DIR)/imgui_draw.cpp \
+    $(IMGUI_DIR)/imgui_tables.cpp \
+    $(IMGUI_DIR)/imgui_widgets.cpp \
+    $(IMGUI_DIR)/backends/imgui_impl_glfw.cpp \
+    $(IMGUI_DIR)/backends/imgui_impl_opengl3.cpp \
+    $(IMPLOT_DIR)/implot.cpp \
+    $(IMPLOT_DIR)/implot_items.cpp
+
+TARGET = image_filter_gui
+
+all: $(TARGET)
+
+$(TARGET): src/gui.cpp src/file_picker.mm $(IMGUI_SRC)
+	$(CXX) $(CXXFLAGS) src/gui.cpp src/file_picker.mm $(IMGUI_SRC) -o $(TARGET) $(LDFLAGS)
+
+clean:
+	rm -f $(TARGET)
+
+.PHONY: all clean

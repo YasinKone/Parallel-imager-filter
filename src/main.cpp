@@ -377,7 +377,7 @@ Image sobel_baseline_serial(const Image& src) {
             dst.data[static_cast<size_t>(y) * gray.width + x] = clamp_u8(std::sqrt(gx * gx + gy * gy));
         }
     }
-    return dst;
+    return dst; 
 }
 
 Image sobel_cache_friendly(const Image& src) {
@@ -552,6 +552,147 @@ void run_filter_all_strategies(int choice, const Image& src) {
     }
 }
 
+
+template <typename Func>
+void benchmark_thread_scaling_strategy(
+    const std::string& filter,
+    const std::string& strategy,
+    const Image& src,
+    Func&& fn
+) {
+    const int thread_counts[] = {1,2,4,8};
+    const int repetitions = 5;
+
+    Image reference;
+    bool first_result = true;
+    double baseline_ms = 0.0;
+
+    for (int thread_count : thread_counts){
+
+        #ifdef _OPENMP
+        omp_set_num_threads(thread_count);
+        #else
+        if (thread_count > 1) continue;
+        #endif
+
+        // A WARM UP RUN
+        Image output = fn(src);
+
+        // MEASURES FIVE RUNS
+        double total_ms = 0.0;
+
+        for (int i = 0; i < repetitions; ++i){
+            total_ms += measure_ms([&](){
+                output = fn(src);
+            });
+        }
+
+        double average_ms = total_ms / repetitions;
+
+        if (first_result){
+            reference = output;
+            baseline_ms = average_ms;
+            first_result = false;
+        }
+
+        double speedup = baseline_ms / average_ms;
+        int max_diff = compute_max_diff(reference, output);
+
+        std::cout << std::left
+                  << std::setw(14) << filter
+                  << std::setw(18) << strategy
+                  << std::right
+                  << std::setw(9) << thread_count
+                  << std::setw(14) << std::fixed
+                  << std::setprecision(3) << average_ms
+                  << std::setw(12) << std::setprecision(2)
+                  << speedup << "x"
+                  << std::setw(12) << max_diff
+                  << "\n";
+    }
+}
+
+void run_thread_scaling_experiment(const Image& src){
+
+    #ifdef _OPENMP
+    int orignal_threads = omp_get_max_threads();
+    #endif
+
+
+    std::cout << "\n=== Thread Scaling Experiment ===\n";
+    std::cout << "Image: "  << src.width << "x" << src.height << "\n";
+
+
+    std::cout << std::left
+              << std::setw(14) << "Filter"
+              << std::setw(18) << "Strategy"
+              << std::right
+              << std::setw(9) << "Threads"
+              << std::setw(14) << "Time (ms)"
+              << std::setw(12) << "Speedup"
+              << std::setw(12) << "Max Diff\n";
+    std::cout << std::string(79, '-') << "\n";
+
+        // GRAYSCALE
+        benchmark_thread_scaling_strategy(
+            "Grayscale", "OpenMP", src, gray_openmp);
+        
+        benchmark_thread_scaling_strategy(
+            "Grayscale", "Tiled+OpenMP", src,
+            [](const Image& img) { return gray_tiled_openmp(img, 32); });
+        
+            
+
+        //Gaussian Blur
+        benchmark_thread_scaling_strategy(
+            "Gaussian", "OpenMP", src, gauss_openmp);
+
+        benchmark_thread_scaling_strategy(
+            "Gaussian", "Tiled+OpenMP", src,
+            [](const Image& img) { return gauss_tiled_openmp(img, 32); });
+        
+            
+
+        //Sobel Edge Detection
+        benchmark_thread_scaling_strategy(
+            "Sobel", "OpenMP", src, sobel_openmp);
+
+        benchmark_thread_scaling_strategy(
+            "Sobel", "Tiled+OpenMP", src,
+            [](const Image& img) { return sobel_tiled_openmp(img, 32); });
+
+        #ifdef _OPENMP
+        omp_set_num_threads(orignal_threads);
+        #endif
+        
+        std::cout << "\n Thread scaling experiment completed.\n";
+            
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 void print_menu(const std::string& filename) {
     int threads = 1;
     #ifdef _OPENMP
@@ -566,11 +707,15 @@ void print_menu(const std::string& filename) {
     std::cout << "1. Grayscale Conversion\n";
     std::cout << "2. Gaussian Blur\n";
     std::cout << "3. Sobel Edge Detection)\n";
-    std::cout << "4. Change Image Filename / Exit\n";
-    std::cout << "Enter option (1-4): ";
+    std::cout << "4. Thread Scaling Experiment(1, 2, 4, 8 threads)\n";
+    std::cout << "5. Change Image Filename / Exit\n";
+    std::cout << "Enter option (1-5): ";
 }
 
 int main() {
+    #ifdef _OPENMP
+    omp_set_dynamic(0);
+    #endif
     std::string filename;
     std::cout << "Enter image filename in project folder (e.g., sample.png): ";
     std::getline(std::cin, filename);
@@ -591,12 +736,12 @@ int main() {
         if (!(std::cin >> choice)) {
             std::cin.clear();
             std::cin.ignore(10000, '\n');
-            std::cout << "Invalid input. Please enter 1, 2, 3, or 4.\n";
+            std::cout << "Invalid input. Please enter a number from 1 to 5.\n";
             continue;
         }
         std::cin.ignore(10000, '\n');
 
-        if (choice == 4) {
+        if (choice == 5) {
             std::cout << "Enter new filename (or 'exit' to quit): ";
             std::getline(std::cin, filename);
             if (filename == "exit") break;
@@ -611,8 +756,10 @@ int main() {
 
         if (choice >= 1 && choice <= 3) {
             run_filter_all_strategies(choice, img);
+        } else if (choice == 4) {
+            run_thread_scaling_experiment(img);
         } else {
-            std::cout << "Please select a valid option (1-4).\n";
+            std::cout << "Please select a valid option (1-5).\n";
         }
     }
 
