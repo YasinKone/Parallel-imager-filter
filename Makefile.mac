@@ -1,0 +1,15 @@
+CXX = clang++
+CXXFLAGS = -std=c++17 -O3 -Wall -Wextra -Xpreprocessor -fopenmp -Iinclude -I/opt/homebrew/opt/libomp/include
+LDFLAGS = -L/opt/homebrew/opt/libomp/lib -lomp
+TARGET = imgproc
+SRC = src/main.cpp
+
+all: $(TARGET)
+
+$(TARGET): $(SRC)
+	$(CXX) $(CXXFLAGS) $(SRC) -o $(TARGET) $(LDFLAGS)
+
+clean:
+	rm -f $(TARGET) $(TARGET).exe
+
+.PHONY: all clean
